@@ -9,7 +9,7 @@ namespace tunecino\nestedrest;
 
 use Yii;
 use yii\web\UrlRuleInterface;
-use yii\base\Object;
+use yii\base\BaseObject;
 use yii\helpers\Inflector;
 use yii\helpers\StringHelper;
 use yii\base\InvalidConfigException;
@@ -18,7 +18,7 @@ use yii\base\InvalidConfigException;
  * UrlRule is a custom implementation that creates multi instances of a UrlRuleInterface[] to generate nested rules based in model relations.
  * @author Salem Ouerdani <tunecino@gmail.com>
  */
-class UrlRule extends Object implements UrlRuleInterface
+class UrlRule extends BaseObject implements UrlRuleInterface
 {
     /**
      * @var string class name of the model which will be used to generate related rules.
@@ -97,6 +97,13 @@ class UrlRule extends Object implements UrlRuleInterface
     ];
 
     private $_rulesFactory;
+    /**
+     * @var bool whether to automatically pluralize the URL names for controllers.
+     * If true, a controller ID will appear in plural form in URLs. For example, `user` controller
+     * will appear as `users` in URLs.
+     * @see controller
+     */
+    public $pluralize = true;
 
     /**
      * Returns the UrlRule instance used to generate related rules to each model.
@@ -124,26 +131,37 @@ class UrlRule extends Object implements UrlRuleInterface
     public function init()
     {
         parent::init();
-        if (empty($this->modelClass))
+        if (empty($this->modelClass)) {
             throw new InvalidConfigException('"modelClass" must be set.');
+        }
 
-        if (empty($this->relations))
+        if (empty($this->relations)) {
             throw new InvalidConfigException('"relations" must be set.');
+        }
 
         $this->config['patterns'] = $this->patterns;
         $this->config['tokens'] = $this->tokens;
-        if (!empty($this->only)) $this->config['only'] = $this->only;
-        if (!empty($this->except)) $this->config['except'] = $this->except;
-        if (!empty($this->extraPatterns)) $this->config['extraPatterns'] = $this->extraPatterns;
+        if (!empty($this->only)) {
+            $this->config['only'] = $this->only;
+        }
+        if (!empty($this->except)) {
+            $this->config['except'] = $this->except;
+        }
+        if (!empty($this->extraPatterns)) {
+            $this->config['extraPatterns'] = $this->extraPatterns;
+        }
     }
 
     /**
      * @inheritdoc
      */
-    public function createUrl($manager, $route, $params) 
+    public function createUrl($manager, $route, $params)
     {
-        unset($params['relativeClass'], $params['relationName'], $params['linkAttribute']);
-        return $this->rulesFactory->createUrl($manager, $route, $params);
+        if ($this->rulesFactory) {
+            unset($params['relativeClass'], $params['relationName'], $params['linkAttribute']);
+            return $this->rulesFactory->createUrl($manager, $route, $params);
+        }
+        return false;
     }
 
     /**
@@ -153,30 +171,35 @@ class UrlRule extends Object implements UrlRuleInterface
     {
         $modelName = Inflector::camel2id(StringHelper::basename($this->modelClass));
 
-        $resourceName = isset($this->resourceName) ? 
-            $this->resourceName : Inflector::pluralize($modelName);
+        if (isset($this->resourceName)) {
+            $resourceName = $this->resourceName;
+        } else {
+            $resourceName = $this->pluralize ? Inflector::pluralize($modelName) : $modelName;
+        }
 
         $link_attribute = isset($this->linkAttribute) ? $this->linkAttribute : $modelName . '_id';
-        $this->config['prefix'] = $resourceName . '/<' .$link_attribute. ':\d+>';
+        $this->config['prefix'] = $resourceName . '/<' . $link_attribute . ':\d+>';
 
         foreach ($this->relations as $key => $value) {
             if (is_int($key)) {
                 $relation = $value;
-                $urlName = Inflector::camel2id(Inflector::pluralize($relation));
+                $urlName = $this->pluralize ? Inflector::camel2id(Inflector::pluralize($relation)) : Inflector::camel2id($relation);
                 $controller = Inflector::camel2id(Inflector::singularize($relation));
-            }
-            else {
+            } else {
                 $relation = $key;
-                if (is_array($value)) list($urlName, $controller) = each($value);
-                else {
-                    $urlName = Inflector::camel2id(Inflector::pluralize($relation));
+                if (is_array($value)) {
+                    list($urlName, $controller) = each($value);
+                } else {
+                    $urlName = $this->pluralize ? Inflector::camel2id(Inflector::pluralize($relation)) : Inflector::camel2id($relation);
                     $controller = $value;
                 }
             }
 
-            if (YII_DEBUG) (new $this->modelClass)->getRelation($relation);
+            if (YII_DEBUG) {
+                (new $this->modelClass)->getRelation($relation);
+            }
 
-            $modulePrefix = isset($this->modulePrefix) ? $this->modulePrefix .'/' : '';
+            $modulePrefix = isset($this->modulePrefix) ? $this->modulePrefix . '/' : '';
             $this->config['controller'][$urlName] = $modulePrefix . $controller;
 
             $this->setRulesFactory($this->config);
