@@ -7,6 +7,7 @@
 
 namespace tunecino\nestedrest;
 
+use app\controllers\Rest;
 use Yii;
 use yii\data\ActiveDataProvider;
 
@@ -29,8 +30,6 @@ class IndexAction extends Action
         $relModel = $this->getRelativeModel();
         $getter = 'get' . $this->relationName;
 
-        return new ActiveDataProvider([
-            'query' => $relModel->$getter(),
-        ]);
+        return Rest::filterIndexDataProvider($relModel->$getter());
     }
 }
